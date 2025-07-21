@@ -1,5 +1,5 @@
 const SERVER_URL = "https://ai-interview-backend-bzpz.onrender.com";
-
+let recognitionTimeout = null;
 
 const urlParams = new URLSearchParams(window.location.search);
 const sessionId = urlParams.get("sessionId") || "anonymous_" + Date.now();
@@ -120,7 +120,7 @@ function askQuestionAndListen(index) {
     return;
   }
 
-  currentQuestionIndex = index; 
+  currentQuestionIndex = index;
 
   const question = questions[index];
   conversation += `AI: ${question}\n`;
@@ -129,11 +129,19 @@ function askQuestionAndListen(index) {
   const utterance = new SpeechSynthesisUtterance(question);
   utterance.onend = () => {
     recognition.start();
+
+    
+    recognitionTimeout = setTimeout(() => {
+      recognition.stop();  
+      handleNoResponseFallback(); 
+    }, 6000); 
   };
   speechSynthesis.speak(utterance);
 }
 
 recognition.onresult = (event) => {
+  clearTimeout(recognitionTimeout); // Stop the fallback timeout
+
   let finalTranscript = "";
   let interimTranscript = "";
 
@@ -168,11 +176,19 @@ recognition.onresult = (event) => {
   }
 };
 
-recognition.onerror = () => {
+function handleNoResponseFallback() {
   conversation += `Candidate: [No response]\n\n`;
   appendMessage("user", "[No response]");
-  recognition.stop();
   setTimeout(() => askQuestionAndListen(currentQuestionIndex + 1), 1500);
+}
+
+
+recognition.onerror = () => {
+  recognition.onerror = () => {
+  clearTimeout(recognitionTimeout); 
+  handleNoResponseFallback();
+};
+
 };
 
 function recoverPreviousRecording() {
