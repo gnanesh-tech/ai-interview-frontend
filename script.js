@@ -1,8 +1,22 @@
+let sessionId = "";  
+
+document.getElementById("candidateForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const name = document.getElementById("name").value.trim();
+  const email = document.getElementById("email").value.trim();
+
+    
+  sessionId = `${name}_${Date.now()}`.replace(/\s+/g, "_");
+
+  document.getElementById("candidateForm").style.display = "none";
+  document.getElementById("startBtn").style.display = "inline-block";
+});
+
 const SERVER_URL = "https://ai-interview-backend-bzpz.onrender.com";
 let recognitionTimeout = null;
 
 const urlParams = new URLSearchParams(window.location.search);
-const sessionId = urlParams.get("sessionId") || "anonymous_" + Date.now();
+//const sessionId = urlParams.get("sessionId") || "anonymous_" + Date.now();
 
 function appendMessage(sender, text) {
   const chat = document.getElementById("chatContainer");
@@ -140,7 +154,7 @@ function askQuestionAndListen(index) {
 }
 
 recognition.onresult = (event) => {
-  clearTimeout(recognitionTimeout); // Stop the fallback timeout
+  clearTimeout(recognitionTimeout); 
 
   let finalTranscript = "";
   let interimTranscript = "";
