@@ -1,4 +1,4 @@
-const SERVER_URL = "http://localhost:8000";
+const SERVER_URL = "https://ai-interview-backend-bzpz.onrender.com";
 
 
 const urlParams = new URLSearchParams(window.location.search);
