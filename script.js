@@ -1,16 +1,19 @@
 let sessionId = "";  
+let candidateName = "";
+let candidateEmail = "";
 
 document.getElementById("candidateForm").addEventListener("submit", (e) => {
   e.preventDefault();
-  const name = document.getElementById("name").value.trim();
-  const email = document.getElementById("email").value.trim();
+  candidateName = document.getElementById("name").value.trim();
+  candidateEmail = document.getElementById("email").value.trim();
 
-
-  sessionId = `${name}_${Date.now()}`.replace(/\s+/g, "_");
+  sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
 
   document.getElementById("candidateForm").style.display = "none";
   document.getElementById("startBtn").style.display = "inline-block";
 });
+
+
 
 const SERVER_URL = "https://ai-interview-backend-bzpz.onrender.com";
 let recognitionTimeout = null;
@@ -239,6 +242,9 @@ function recoverPreviousRecording() {
 
 function uploadToServer(videoBlob, textBlob) {
   const formData = new FormData();
+  formData.append("name", candidateName);  
+  formData.append("email", candidateEmail);
+
   formData.append("video", videoBlob, "interview_video.webm");
   formData.append("transcript", textBlob, "interview_transcript.txt");
 
