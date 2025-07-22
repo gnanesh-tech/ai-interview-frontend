@@ -5,7 +5,7 @@ document.getElementById("candidateForm").addEventListener("submit", (e) => {
   const name = document.getElementById("name").value.trim();
   const email = document.getElementById("email").value.trim();
 
-    
+
   sessionId = `${name}_${Date.now()}`.replace(/\s+/g, "_");
 
   document.getElementById("candidateForm").style.display = "none";
@@ -113,15 +113,23 @@ startButton.addEventListener("click", async () => {
     }
   };
 
-  mediaRecorder.onstop = () => {
-    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-    const textBlob = new Blob([conversation], { type: 'text/plain' });
-    uploadToServer(blob, textBlob);
+  mediaRecorder.onstop = async () => {
+  const blob = new Blob(recordedChunks, { type: 'video/webm' });
+  const textBlob = new Blob([conversation], { type: 'text/plain' });
 
-    const clearTx = db.transaction("chunks", "readwrite");
-    const clearStore = clearTx.objectStore("chunks");
-    clearStore.clear();
-  };
+  try {
+    await uploadToServer(blob, textBlob);
+    alert("Interview uploaded successfully!");
+  } catch (err) {
+    console.error("Upload failed:", err);
+    alert("Upload to server failed.");
+  }
+
+  const clearTx = db.transaction("chunks", "readwrite");
+  const clearStore = clearTx.objectStore("chunks");
+  clearStore.clear();
+};
+
 
   currentQuestionIndex = 0;
   mediaRecorder.start();
