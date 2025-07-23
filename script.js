@@ -109,9 +109,12 @@ startButton.addEventListener("click", async () => {
   recordedChunks = [];
   mediaRecorder = new MediaRecorder(combinedStream);
 
-  mediaRecorder.ondataavailable = (e) => {
-  if (e.data.size > 0) {
-    sendChunkToServer(e.data);
+  recordedChunks = [];
+
+mediaRecorder.ondataavailable = (e) => {
+  if (e.data && e.data.size > 0) {
+    recordedChunks.push(e.data);  // For full upload
+    sendChunkToServer(e.data);    // For real-time fallback
   }
 };
 
@@ -125,7 +128,6 @@ function sendChunkToServer(chunk) {
     body: formData,
   }).catch((err) => {
     console.error("Chunk upload failed", err);
-    // Optional: store in IndexedDB for retry
   });
 }
 
@@ -149,7 +151,7 @@ function sendChunkToServer(chunk) {
 
 
   currentQuestionIndex = 0;
-  mediaRecorder.start();
+  mediaRecorder.start(5000);
   askQuestionAndListen(currentQuestionIndex);
 });
 
