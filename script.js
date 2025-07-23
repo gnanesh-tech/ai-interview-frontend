@@ -10,6 +10,7 @@ document.getElementById("candidateForm").addEventListener("submit", (e) => {
   sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
 
 // Register candidate with backend before starting interview
+const SERVER_URL = "https://ai-interview-backend.onrender.com";
 fetch(`${SERVER_URL}/register`, {
   method: "POST",
   headers: {
@@ -43,7 +44,7 @@ fetch(`${SERVER_URL}/register`, {
 
 
 
-const SERVER_URL = "https://ai-interview-backend-bzpz.onrender.com";
+//const SERVER_URL = "https://ai-interview-backend-bzpz.onrender.com";
 let recognitionTimeout = null;
 
 const urlParams = new URLSearchParams(window.location.search);
