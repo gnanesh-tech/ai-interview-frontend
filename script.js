@@ -9,8 +9,36 @@ document.getElementById("candidateForm").addEventListener("submit", (e) => {
 
   sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
 
-  document.getElementById("candidateForm").style.display = "none";
-  document.getElementById("startBtn").style.display = "inline-block";
+// Register candidate with backend before starting interview
+fetch(`${SERVER_URL}/register`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    name: candidateName,
+    email: candidateEmail,
+    sessionId: sessionId,
+  }),
+})
+  .then((res) => {
+    if (!res.ok) throw new Error("Failed to register candidate.");
+    return res.json();
+  })
+  .then((data) => {
+    console.log("Candidate registered:", data.message);
+
+    // Proceed only after registration is successful
+    document.getElementById("candidateForm").style.display = "none";
+    document.getElementById("startBtn").style.display = "none";
+    document.getElementById("startBtn").click();
+  })
+  .catch((err) => {
+    console.error("Registration failed:", err);
+    alert("Could not register candidate. Please try again.");
+  });
+
+
 });
 
 
@@ -46,23 +74,23 @@ window.addEventListener("load", () => {
     });
 
   const openRequest = indexedDB.open("RecordingDB", 1);
-  openRequest.onupgradeneeded = (e) => {
-    db = e.target.result;
-    if (!db.objectStoreNames.contains("chunks")) {
-      db.createObjectStore("chunks", { autoIncrement: true });
-    }
-  };
+openRequest.onupgradeneeded = (e) => {
+  db = e.target.result;
+  if (!db.objectStoreNames.contains("chunks")) {
+    db.createObjectStore("chunks", { autoIncrement: true });
+  }
+};
   openRequest.onsuccess = (e) => {
-    db = e.target.result;
-    const tx = db.transaction("chunks", "readonly");
-    const store = tx.objectStore("chunks");
-    const getAll = store.getAll();
-    getAll.onsuccess = () => {
-      if (getAll.result.length > 0) {
-        if (confirm("Previous interview session was interrupted. Recover?")) {
-          recoverPreviousRecording();
-        }
-      }
+  db = e.target.result;
+  const tx = db.transaction("chunks", "readonly");
+  const store = tx.objectStore("chunks");
+  const getAll = store.getAll();
+  getAll.onsuccess = () => {
+    if (getAll.result.length > 0) {
+      console.log("Previous interview session was interrupted. Auto-recovering...");
+      recoverPreviousRecording();  
+    }
+
     };
   };
 });
@@ -108,13 +136,17 @@ startButton.addEventListener("click", async () => {
   mediaRecorder = new MediaRecorder(combinedStream);
 
   mediaRecorder.ondataavailable = (e) => {
-    if (e.data.size > 0) {
-      recordedChunks.push(e.data);
-      const tx = db.transaction("chunks", "readwrite");
-      const store = tx.objectStore("chunks");
-      store.add(e.data);
-    }
-  };
+  if (e.data.size > 0) {
+    recordedChunks.push(e.data);
+
+    const chunkBlob = new Blob([e.data], { type: 'video/webm' });
+    uploadChunkToServer(chunkBlob, recordedChunks.length);
+  }
+};
+
+
+  
+
 
   mediaRecorder.onstop = async () => {
   const blob = new Blob(recordedChunks, { type: 'video/webm' });
@@ -163,6 +195,22 @@ function askQuestionAndListen(index) {
   };
   speechSynthesis.speak(utterance);
 }
+
+function uploadChunkToServer(blob, index) {
+  const formData = new FormData();
+  formData.append("chunk", blob);
+  formData.append("sessionId", sessionId);
+  formData.append("chunkIndex", index);
+
+  fetch(`${SERVER_URL}/upload_chunk`, {
+    method: "POST",
+    body: formData
+  })
+    .then(res => res.text())
+    .then(data => console.log("Chunk upload:", data))
+    .catch(err => console.error("Chunk upload failed:", err));
+}
+
 
 recognition.onresult = (event) => {
   clearTimeout(recognitionTimeout); 
