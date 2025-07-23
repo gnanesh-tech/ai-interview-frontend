@@ -109,27 +109,30 @@ startButton.addEventListener("click", async () => {
   recordedChunks = [];
   mediaRecorder = new MediaRecorder(combinedStream);
 
-  recordedChunks = [];
+  mediaRecorder.ondataavailable = (e) => {
+  if (e.data.size > 0) {
+    recordedChunks.push(e.data);
 
-mediaRecorder.ondataavailable = (e) => {
-  if (e.data && e.data.size > 0) {
-    recordedChunks.push(e.data);  // For full upload
-    sendChunkToServer(e.data);    // For real-time fallback
+    // Store in IndexedDB
+    const tx = db.transaction("chunks", "readwrite");
+    const store = tx.objectStore("chunks");
+    store.add(e.data);
+
+    // Upload to server immediately
+    const chunkForm = new FormData();
+    chunkForm.append("chunk", e.data, `${Date.now()}.webm`);
+    chunkForm.append("sessionId", sessionId);
+    chunkForm.append("name", candidateName);
+    chunkForm.append("email", candidateEmail);
+
+    fetch(`${SERVER_URL}/upload-chunk`, {
+      method: "POST",
+      body: chunkForm,
+    }).catch((err) => {
+      console.error("Chunk upload failed", err);
+    });
   }
 };
-
-function sendChunkToServer(chunk) {
-  const formData = new FormData();
-  formData.append("chunk", chunk, "chunk.webm");
-  formData.append("sessionId", sessionId);
-
-  fetch(`${SERVER_URL}/upload-chunk`, {
-    method: "POST",
-    body: formData,
-  }).catch((err) => {
-    console.error("Chunk upload failed", err);
-  });
-}
 
 
   mediaRecorder.onstop = async () => {
@@ -137,8 +140,7 @@ function sendChunkToServer(chunk) {
   const textBlob = new Blob([conversation], { type: 'text/plain' });
 
   try {
-    await uploadToServer(blob, textBlob);
-    alert("Interview uploaded successfully!");
+    await uploadToServer(blob, textBlob); // final full file
   } catch (err) {
     console.error("Upload failed:", err);
     alert("Upload to server failed.");
@@ -148,6 +150,7 @@ function sendChunkToServer(chunk) {
   const clearStore = clearTx.objectStore("chunks");
   clearStore.clear();
 };
+
 
 
   currentQuestionIndex = 0;
@@ -280,3 +283,10 @@ function uploadToServer(videoBlob, textBlob) {
       alert("Upload to server failed.");
     });
 }
+
+window.addEventListener("beforeunload", () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop(); 
+  }
+});
+
