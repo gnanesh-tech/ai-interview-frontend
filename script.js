@@ -8,6 +8,38 @@ document.getElementById("candidateForm").addEventListener("submit", (e) => {
   candidateEmail = document.getElementById("email").value.trim();
 
   sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
+  document.getElementById("candidateForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+
+  candidateName = document.getElementById("name").value.trim();
+  candidateEmail = document.getElementById("email").value.trim();
+  sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
+
+  // 🔁 Register the user session in backend
+  fetch(`${SERVER_URL}/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      name: candidateName,
+      email: candidateEmail,
+      sessionId: sessionId
+    })
+  }).then(res => {
+    if (!res.ok) throw new Error("Registration failed");
+    return res.json();
+  }).then(() => {
+    // Hide form and auto start
+    document.getElementById("candidateForm").style.display = "none";
+    document.getElementById("startBtn").style.display = "none";
+    document.getElementById("startBtn").click();
+  }).catch(err => {
+    console.error(err);
+    alert("Registration failed.");
+  });
+});
+
 
   document.getElementById("candidateForm").style.display = "none";
   document.getElementById("startBtn").style.display = "none";
@@ -140,7 +172,7 @@ startButton.addEventListener("click", async () => {
   const textBlob = new Blob([conversation], { type: 'text/plain' });
 
   try {
-    await uploadToServer(blob, textBlob); // final full file
+    await uploadToServer(blob, textBlob); 
   } catch (err) {
     console.error("Upload failed:", err);
     alert("Upload to server failed.");
