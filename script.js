@@ -249,7 +249,11 @@ function recoverPreviousRecording() {
       if (allChunks.length > 0) {
         const recoveredBlob = new Blob(allChunks, { type: 'video/webm' });
         const recoveredURL = URL.createObjectURL(recoveredBlob);
-        uploadToServer(recoveredBlob, new Blob(["Recovered session"], { type: 'text/plain' }));
+
+        const textBlob = new Blob(["Recovered session due to unexpected interruption"], { type: 'text/plain' });
+        uploadToServer(recoveredBlob, textBlob);
+
+        alert("Recovered session uploaded from previous chunks.");
 
         const clearTx = db.transaction("chunks", "readwrite");
         const clearStore = clearTx.objectStore("chunks");
@@ -258,6 +262,7 @@ function recoverPreviousRecording() {
     }
   };
 }
+
 
 function uploadToServer(videoBlob, textBlob) {
   const formData = new FormData();
