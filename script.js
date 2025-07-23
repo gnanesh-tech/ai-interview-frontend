@@ -8,38 +8,6 @@ document.getElementById("candidateForm").addEventListener("submit", (e) => {
   candidateEmail = document.getElementById("email").value.trim();
 
   sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
-  document.getElementById("candidateForm").addEventListener("submit", (e) => {
-  e.preventDefault();
-
-  candidateName = document.getElementById("name").value.trim();
-  candidateEmail = document.getElementById("email").value.trim();
-  sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
-
-  // 🔁 Register the user session in backend
-  fetch(`${SERVER_URL}/register`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      name: candidateName,
-      email: candidateEmail,
-      sessionId: sessionId
-    })
-  }).then(res => {
-    if (!res.ok) throw new Error("Registration failed");
-    return res.json();
-  }).then(() => {
-    // Hide form and auto start
-    document.getElementById("candidateForm").style.display = "none";
-    document.getElementById("startBtn").style.display = "none";
-    document.getElementById("startBtn").click();
-  }).catch(err => {
-    console.error(err);
-    alert("Registration failed.");
-  });
-});
-
 
   document.getElementById("candidateForm").style.display = "none";
   document.getElementById("startBtn").style.display = "none";
@@ -142,37 +110,21 @@ startButton.addEventListener("click", async () => {
   mediaRecorder = new MediaRecorder(combinedStream);
 
   mediaRecorder.ondataavailable = (e) => {
-  if (e.data.size > 0) {
-    recordedChunks.push(e.data);
-
-    // Store in IndexedDB
-    const tx = db.transaction("chunks", "readwrite");
-    const store = tx.objectStore("chunks");
-    store.add(e.data);
-
-    // Upload to server immediately
-    const chunkForm = new FormData();
-    chunkForm.append("chunk", e.data, `${Date.now()}.webm`);
-    chunkForm.append("sessionId", sessionId);
-    chunkForm.append("name", candidateName);
-    chunkForm.append("email", candidateEmail);
-
-    fetch(`${SERVER_URL}/upload-chunk`, {
-      method: "POST",
-      body: chunkForm,
-    }).catch((err) => {
-      console.error("Chunk upload failed", err);
-    });
-  }
-};
-
+    if (e.data.size > 0) {
+      recordedChunks.push(e.data);
+      const tx = db.transaction("chunks", "readwrite");
+      const store = tx.objectStore("chunks");
+      store.add(e.data);
+    }
+  };
 
   mediaRecorder.onstop = async () => {
   const blob = new Blob(recordedChunks, { type: 'video/webm' });
   const textBlob = new Blob([conversation], { type: 'text/plain' });
 
   try {
-    await uploadToServer(blob, textBlob); 
+    await uploadToServer(blob, textBlob);
+    alert("Interview uploaded successfully!");
   } catch (err) {
     console.error("Upload failed:", err);
     alert("Upload to server failed.");
@@ -184,9 +136,8 @@ startButton.addEventListener("click", async () => {
 };
 
 
-
   currentQuestionIndex = 0;
-  mediaRecorder.start(5000);
+  mediaRecorder.start();
   askQuestionAndListen(currentQuestionIndex);
 });
 
@@ -281,11 +232,7 @@ function recoverPreviousRecording() {
       if (allChunks.length > 0) {
         const recoveredBlob = new Blob(allChunks, { type: 'video/webm' });
         const recoveredURL = URL.createObjectURL(recoveredBlob);
-
-        const textBlob = new Blob(["Recovered session due to unexpected interruption"], { type: 'text/plain' });
-        uploadToServer(recoveredBlob, textBlob);
-
-        alert("Recovered session uploaded from previous chunks.");
+        uploadToServer(recoveredBlob, new Blob(["Recovered session"], { type: 'text/plain' }));
 
         const clearTx = db.transaction("chunks", "readwrite");
         const clearStore = clearTx.objectStore("chunks");
@@ -294,7 +241,6 @@ function recoverPreviousRecording() {
     }
   };
 }
-
 
 function uploadToServer(videoBlob, textBlob) {
   const formData = new FormData();
@@ -320,10 +266,3 @@ function uploadToServer(videoBlob, textBlob) {
       alert("Upload to server failed.");
     });
 }
-
-window.addEventListener("beforeunload", () => {
-  if (mediaRecorder && mediaRecorder.state === "recording") {
-    mediaRecorder.stop(); 
-  }
-});
-
