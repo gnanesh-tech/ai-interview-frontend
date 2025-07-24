@@ -2,6 +2,8 @@ let sessionId = "";
 let candidateName = "";
 let candidateEmail = "";
 let micStream = null;
+let silenceTimer = null;
+
 
 
 document.getElementById("candidateForm").addEventListener("submit", (e) => {
@@ -71,7 +73,7 @@ window.addEventListener("load", () => {
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const recognition = new SpeechRecognition();
-recognition.continuous = false;
+recognition.continuous = true;
 recognition.interimResults = true;
 recognition.lang = 'en-US';
 
@@ -197,10 +199,10 @@ function askQuestionAndListen(index) {
 }
 
 recognition.onresult = (event) => {
-  clearTimeout(recognitionTimeout); 
-
   let finalTranscript = "";
   let interimTranscript = "";
+
+  clearTimeout(silenceTimer);  // Reset the silence timer on new speech
 
   for (let i = event.resultIndex; i < event.results.length; ++i) {
     const transcript = event.results[i][0].transcript;
@@ -214,9 +216,6 @@ recognition.onresult = (event) => {
         interimElement.remove();
         interimElement = null;
       }
-
-      recognition.stop();
-      setTimeout(() => askQuestionAndListen(currentQuestionIndex + 1), 1500);
     } else {
       interimTranscript += transcript;
     }
@@ -231,7 +230,14 @@ recognition.onresult = (event) => {
     }
     interimElement.textContent = interimTranscript;
   }
+
+  
+  silenceTimer = setTimeout(() => {
+    recognition.stop();
+    setTimeout(() => askQuestionAndListen(currentQuestionIndex + 1), 1500);
+  }, 3000); 
 };
+
 
 function handleNoResponseFallback() {
   conversation += `Candidate: [No response]\n\n`;
