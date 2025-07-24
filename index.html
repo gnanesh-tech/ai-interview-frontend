@@ -38,6 +38,18 @@
       padding: 10px 20px;
       font-size: 16px;
     }
+    #countdownTimer {
+      position: sticky;
+      top: 0;
+      background-color: #ffcccc;
+      color: #b30000;
+      font-weight: bold;
+      padding: 10px;
+      border-radius: 6px;
+      text-align: center;
+      display: none;
+      z-index: 10;
+    }
 
     .message {
       max-width: 80%;
@@ -73,6 +85,7 @@
   </div>
 
   <div id="chatContainer" >
+    <div id="countdownTimer"></div>
     <!-- Chat messages will appear here -->
   </div>
   

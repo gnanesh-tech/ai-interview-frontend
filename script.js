@@ -81,6 +81,8 @@ let conversation = "";
 let audioCtx;
 let destinationStream;
 let interimElement = null;
+let isSpeechRecognitionWorking = true; 
+
 
 const startButton = document.getElementById("startBtn");
 const preview = document.getElementById("preview");
@@ -160,14 +162,37 @@ function askQuestionAndListen(index) {
 
   const utterance = new SpeechSynthesisUtterance(question);
   utterance.onend = () => {
+  if (isSpeechRecognitionWorking) {
     recognition.start();
 
-    
     recognitionTimeout = setTimeout(() => {
       recognition.stop();  
-      handleNoResponseFallback(); 
-    }, 5000); 
-  };
+      handleNoResponseFallback();
+    }, 10000); 
+  } else {
+    
+    const fallbackDuration = 15; 
+    let remainingTime = fallbackDuration;
+
+    const countdownEl = document.getElementById("countdownTimer");
+    countdownEl.style.display = "block";
+    countdownEl.textContent = `⏳ You have ${remainingTime} seconds to answer...`;
+
+    const countdownInterval = setInterval(() => {
+      remainingTime--;
+      countdownEl.textContent = `⏳ Time left: ${remainingTime} seconds...`;
+
+      if (remainingTime <= 0) {
+        clearInterval(countdownInterval);
+        countdownEl.style.display = "none";
+        conversation += `Candidate: [Spoken during offline, not transcribed]\n\n`;
+        askQuestionAndListen(currentQuestionIndex + 1);
+      }
+    }, 1000); 
+  }
+};
+
+
   speechSynthesis.speak(utterance);
 }
 
@@ -215,13 +240,17 @@ function handleNoResponseFallback() {
 }
 
 
-recognition.onerror = () => {
-  recognition.onerror = () => {
-  clearTimeout(recognitionTimeout); 
+recognition.onerror = (event) => {
+  clearTimeout(recognitionTimeout);
+
+  if (event.error === "network" || event.error === "not-allowed") {
+    isSpeechRecognitionWorking = false;
+    console.warn("Speech recognition stopped due to network or permission issue.");
+  }
+
   handleNoResponseFallback();
 };
 
-};
 
 function recoverPreviousRecording() {
   const tx = db.transaction("chunks", "readonly");
@@ -274,6 +303,8 @@ window.addEventListener("online", () => {
   if (mediaRecorder && mediaRecorder.state === "inactive" && recordedChunks.length > 0) {
     const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
     const textBlob = new Blob([conversation], { type: 'text/plain' });
+    
+
 
     uploadToServer(videoBlob, textBlob);
     alert("Internet reconnected. Uploading your interview now...");
