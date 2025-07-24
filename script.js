@@ -11,7 +11,7 @@ document.getElementById("candidateForm").addEventListener("submit", (e) => {
   sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
 
   document.getElementById("candidateForm").style.display = "none";
-  document.getElementById("startBtn").style.display = "block"; // Allow user to click
+  document.getElementById("startBtn").style.display = "block"; 
 });
 
 
@@ -147,6 +147,7 @@ startButton.addEventListener("click", async () => {
 
 function askQuestionAndListen(index) {
   if (index >= questions.length) {
+    alert("Interview completed. Uploading your data...");
     mediaRecorder.stop();
     return;
   }
@@ -165,7 +166,7 @@ function askQuestionAndListen(index) {
     recognitionTimeout = setTimeout(() => {
       recognition.stop();  
       handleNoResponseFallback(); 
-    }, 6000); 
+    }, 5000); 
   };
   speechSynthesis.speak(utterance);
 }
@@ -268,4 +269,18 @@ async function uploadToServer(videoBlob, textBlob) {
     alert("Upload to server failed.");
   }
 }
+
+window.addEventListener("online", () => {
+  if (mediaRecorder && mediaRecorder.state === "inactive" && recordedChunks.length > 0) {
+    const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+    const textBlob = new Blob([conversation], { type: 'text/plain' });
+
+    uploadToServer(videoBlob, textBlob);
+    alert("Internet reconnected. Uploading your interview now...");
+  }
+});
+window.addEventListener("offline", () => {
+  alert("Internet disconnected. Your interview is still recording. Responses won't be transcribed until WiFi returns.");
+});
+
 
