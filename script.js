@@ -1,19 +1,19 @@
 let sessionId = "";  
 let candidateName = "";
 let candidateEmail = "";
+let micStream = null;
+
 
 document.getElementById("candidateForm").addEventListener("submit", (e) => {
   e.preventDefault();
   candidateName = document.getElementById("name").value.trim();
   candidateEmail = document.getElementById("email").value.trim();
-
   sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
 
   document.getElementById("candidateForm").style.display = "none";
-  document.getElementById("startBtn").style.display = "none";
-  document.getElementById("startBtn").click();  
-
+  document.getElementById("startBtn").style.display = "block"; // Allow user to click
 });
+
 
 
 
@@ -91,7 +91,7 @@ startButton.addEventListener("click", async () => {
     return;
   }
 
-  const micStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  micStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   preview.srcObject = micStream;
 
   audioCtx = new AudioContext();
@@ -129,6 +129,10 @@ startButton.addEventListener("click", async () => {
     console.error("Upload failed:", err);
     alert("Upload to server failed.");
   }
+  if (micStream) {
+  micStream.getTracks().forEach(track => track.stop());
+  }
+
 
   const clearTx = db.transaction("chunks", "readwrite");
   const clearStore = clearTx.objectStore("chunks");
@@ -242,27 +246,26 @@ function recoverPreviousRecording() {
   };
 }
 
-function uploadToServer(videoBlob, textBlob) {
+async function uploadToServer(videoBlob, textBlob) {
   const formData = new FormData();
   formData.append("name", candidateName);  
   formData.append("email", candidateEmail);
-
   formData.append("video", videoBlob, "interview_video.webm");
   formData.append("transcript", textBlob, "interview_transcript.txt");
-
   formData.append("sessionId", sessionId);
 
-  fetch(`${SERVER_URL}/upload`, {
-    method: "POST",
-    body: formData,
-  })
-    .then(res => res.text())
-    .then(data => {
-      console.log("Upload response:", data);
-      alert("Interview uploaded successfully!");
-    })
-    .catch(err => {
-      console.error("Upload failed:", err);
-      alert("Upload to server failed.");
+  try {
+    const response = await fetch(`${SERVER_URL}/upload`, {
+      method: "POST",
+      body: formData,
     });
+
+    const result = await response.text();
+    console.log("Upload response:", result);
+    alert("Interview uploaded successfully!");
+  } catch (err) {
+    console.error("Upload failed:", err);
+    alert("Upload to server failed.");
+  }
 }
+
