@@ -1,6 +1,8 @@
 let sessionId = "";  
 let candidateName = "";
 let candidateEmail = "";
+let micStream = null;
+
 
 document.getElementById("candidateForm").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -89,7 +91,7 @@ startButton.addEventListener("click", async () => {
     return;
   }
 
-  const micStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  micStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   preview.srcObject = micStream;
 
   audioCtx = new AudioContext();
@@ -127,6 +129,10 @@ startButton.addEventListener("click", async () => {
     console.error("Upload failed:", err);
     alert("Upload to server failed.");
   }
+  if (micStream) {
+  micStream.getTracks().forEach(track => track.stop());
+  }
+
 
   const clearTx = db.transaction("chunks", "readwrite");
   const clearStore = clearTx.objectStore("chunks");
