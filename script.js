@@ -369,17 +369,30 @@ async function uploadToServer(videoBlob, transcriptBlob) {
   formData.append("name", candidateName);
   formData.append("email", candidateEmail);
 
-  const response = await fetch(`${SERVER_URL}/upload`, {
-    method: "POST",
-    body: formData,
-  });
+  try {
+    const response = await fetch(`${SERVER_URL}/upload`, {
+      method: "POST",
+      body: formData,
+    });
 
-  if (!response.ok) {
-    throw new Error("Failed to upload final video and transcript.");
+    const resultText = await response.text();
+    console.log("📦 Server response:", resultText);
+
+    if (!response.ok) {
+      console.error("❌ Upload failed with status", response.status);
+      alert("Upload failed. Server said: " + resultText);
+      return;
+    }
+
+    console.log("✅ Final video and transcript uploaded.");
+    alert("✅ Interview uploaded successfully!");
+
+  } catch (err) {
+    console.error("🚨 Upload failed due to network or crash:", err);
+    alert("Upload to server failed due to error: " + err.message);
   }
-
-  console.log("✅ Final video and transcript uploaded.");
 }
+
 
 
 
