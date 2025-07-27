@@ -365,49 +365,6 @@ function askQuestionAndListen(index) {
 }
 
 
-
-
-recognition.onresult = (event) => {
-  let finalTranscript = "";
-  let interimTranscript = "";
-
-  clearTimeout(silenceTimer);  
-
-  for (let i = event.resultIndex; i < event.results.length; ++i) {
-    const transcript = event.results[i][0].transcript;
-
-    if (event.results[i].isFinal) {
-      finalTranscript += transcript + " ";
-      conversation += `Candidate: ${transcript}\n\n`;
-      appendMessage("user", transcript);
-
-      if (interimElement) {
-        interimElement.remove();
-        interimElement = null;
-      }
-    } else {
-      interimTranscript += transcript;
-    }
-  }
-
-  if (interimTranscript) {
-    if (!interimElement) {
-      interimElement = document.createElement("div");
-      interimElement.classList.add("message", "user");
-      interimElement.style.opacity = "0.6";
-      document.getElementById("chatContainer").appendChild(interimElement);
-    }
-    interimElement.textContent = interimTranscript;
-  }
-
-  
-  silenceTimer = setTimeout(() => {
-    recognition.stop();
-    setTimeout(() => askQuestionAndListen(currentQuestionIndex + 1), 1500);
-  }, 3000); 
-};
-
-
 function handleNoResponseFallback() {
   conversation += `Candidate: [No response]\n\n`;
   appendMessage("user", "[No response]");
