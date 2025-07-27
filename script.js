@@ -4,21 +4,67 @@ let candidateEmail = "";
 let isRecovering = false;
 
 
-document.getElementById("candidateForm").addEventListener("submit", (e) => {
+document.getElementById("candidateForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  candidateName = document.getElementById("name").value.trim();
-  candidateEmail = document.getElementById("email").value.trim();
 
-  sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
+   candidateName = document.getElementById("name").value.trim();
+   candidateEmail = document.getElementById("email").value.trim();
 
+  if (!candidateName || !candidateEmail) {
+    alert("Please enter both name and email.");
+    return;
+  }
+
+   sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
+
+  // Store in localStorage
+  localStorage.setItem("candidateName", candidateName);
+  localStorage.setItem("candidateEmail", candidateEmail);
+  localStorage.setItem("sessionId", sessionId);
 
   document.getElementById("candidateForm").style.display = "none";
-  document.getElementById("startBtn").style.display = "none";
-  document.getElementById("startBtn").click();  
 
+  // ✅ Start the interview now
+  startInterview(candidateName, candidateEmail, sessionId);
 });
 
 
+async function startInterview(name, email, sessionId) {
+  if (!name || !email || !sessionId) {
+    alert("Missing candidate details. Please fill the form again.");
+    return;
+  }
+
+  try {
+    const response = await fetch("https://your-backend-url/start-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: name,
+        email: email,
+        session_id: sessionId
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Backend Error:", errorData);
+      alert("Failed to start session. Please try again.");
+      return;
+    }
+
+    const data = await response.json();
+    console.log("Session started:", data);
+
+    // 👉 From here, you can now begin recording/chat etc.
+
+  } catch (error) {
+    console.error("Error starting interview:", error);
+    alert("Error connecting to server.");
+  }
+}
 
 const SERVER_URL = "https://ai-interview-backend-bzpz.onrender.com";
 let recognitionTimeout = null;
@@ -99,26 +145,7 @@ startButton.addEventListener("click", async () => {
     return;
   }
 
-  // ✅ Create FormData and POST to /start-session
-  const formData = new FormData();
-  formData.append("sessionId", sessionId);
-  formData.append("name", candidateName);
-  formData.append("email", candidateEmail);
-
-  try {
-    const res = await fetch(`${SERVER_URL}/start-session`, {
-      method: "POST",
-      body: formData
-    });
-
-    if (!res.ok) {
-      throw new Error("Failed to start session");
-    }
-  } catch (err) {
-    console.error("❌ Error initializing session:", err);
-    alert("Could not start session on the server.");
-    return;
-  }
+  
 
   // ✅ Continue recording logic
   if (questions.length === 0) {
