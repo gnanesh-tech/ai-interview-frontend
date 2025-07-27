@@ -242,20 +242,18 @@ mediaRecorder.start(5000);
 
 
   mediaRecorder.onstop = async () => {
- 
-  // 2. Fetch transcript
   await fetchTranscript(currentQuestionIndex);
 
-  // 3. Delay before moving to next question
   setTimeout(() => {
-    currentQuestionIndex++;
-    if (currentQuestionIndex < questions.length) {
-      askNextQuestion(currentQuestionIndex);
+    if (currentQuestionIndex + 1 < questions.length) {
+      currentQuestionIndex++;
+      askQuestionAndListen(currentQuestionIndex);
     } else {
-      finalizeInterview();
+      finalizeInterview(); // Now called reliably
     }
-  }, 1500); // 1.5 sec buffer
+  }, 1500);
 };
+
 
 async function finalizeInterview() {
   alert("Interview completed. Uploading your data...");
@@ -269,24 +267,27 @@ async function finalizeInterview() {
 
 
   try {
-    const response = await fetch(`${SERVER_URL}/finalize-session`, {
-      method: "POST",
-      body: formData
-    });
+  const response = await fetch(`${SERVER_URL}/finalize-session`, {
+    method: "POST",
+    body: formData
+  });
 
-    if (response.ok) {
-      console.log(" Session finalized successfully.");
-    } else {
-      console.warn(" Finalize session failed:", await response.text());
-    }
-  } catch (err) {
-    console.error(" Error finalizing session:", err);
+  if (response.ok) {
+    console.log("✅ Session finalized successfully.");
+    
+    alert("🎉 Interview uploaded successfully!");
+    document.getElementById("chatContainer").innerHTML += `
+      <div class='message ai'>✅ Interview Uploaded Successfully</div>
+    `;
+  } else {
+    console.warn("⚠️ Finalize session failed:", await response.text());
   }
+} catch (err) {
+  console.error("❌ Error finalizing session:", err);
 }
 
 
-
-
+}
 
   currentQuestionIndex = 0;
   
@@ -298,13 +299,17 @@ askQuestionAndListen(currentQuestionIndex);
 let isFinalizing = false;
 
 function askQuestionAndListen(index) {
-  if (isFinalizing || index >= questions.length) {
-    if (!isFinalizing && mediaRecorder && mediaRecorder.state !== "inactive") {
-      isFinalizing = true;
-      mediaRecorder.stop();
-    }
-    return;
+  if (index >= questions.length) {
+  if (!isFinalizing && mediaRecorder && mediaRecorder.state !== "inactive") {
+    isFinalizing = true;
+    mediaRecorder.stop(); // triggers mediaRecorder.onstop
+  } else if (!isFinalizing) {
+    finalizeInterview(); // just in case recording already stopped
+    isFinalizing = true;
   }
+  return;
+  }
+
 
   if (index >= questions.length) {
     alert("Interview completed. Uploading your data...");
@@ -332,26 +337,6 @@ function askQuestionAndListen(index) {
       recognition.stop();  
       handleNoResponseFallback();
     }, 5000); 
-  } else {
-    
-    const fallbackDuration = 15; 
-    let remainingTime = fallbackDuration;
-
-    const countdownEl = document.getElementById("countdownTimer");
-    countdownEl.style.display = "block";
-    countdownEl.textContent = `⏳ You have ${remainingTime} seconds to answer...`;
-
-    const countdownInterval = setInterval(() => {
-      remainingTime--;
-      countdownEl.textContent = `⏳ Time left: ${remainingTime} seconds...`;
-
-      if (remainingTime <= 0) {
-        clearInterval(countdownInterval);
-        countdownEl.style.display = "none";
-        conversation += `Candidate: [Spoken during offline, not transcribed]\n\n`;
-        askQuestionAndListen(currentQuestionIndex + 1);
-      }
-    }, 1000); 
   }
 };
 
