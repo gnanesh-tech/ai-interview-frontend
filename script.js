@@ -25,6 +25,8 @@ document.getElementById("candidateForm").addEventListener("submit", async (e) =>
   document.getElementById("candidateForm").style.display = "none";
 
   // ✅ Start the interview now
+  console.log("Calling startInterview with:", candidateName, candidateEmail, sessionId);
+
   startInterview(candidateName, candidateEmail, sessionId);
 });
 
@@ -36,7 +38,8 @@ async function startInterview(name, email, sessionId) {
   }
 
   try {
-    const response = await fetch("https://your-backend-url/start-session", {
+    const response = await fetch(`${SERVER_URL}/start-session`, {
+
       method: "POST",
       headers: {
         "Content-Type": "application/json"
