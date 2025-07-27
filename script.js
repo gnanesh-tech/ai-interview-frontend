@@ -1,50 +1,18 @@
-let sessionId = null;
-let chunkIndex = 0;
-
- 
-let wasOffline = false;
-let offlineStartTime = null;
-let offlineTimer = null;
-
+let sessionId = "";  
 let candidateName = "";
 let candidateEmail = "";
-let micStream = null;
-let silenceTimer = null;
-let recordedChunks = [];
 
-
-
-
-
-document.getElementById("candidateForm").addEventListener("submit", async (e) => {
+document.getElementById("candidateForm").addEventListener("submit", (e) => {
   e.preventDefault();
   candidateName = document.getElementById("name").value.trim();
   candidateEmail = document.getElementById("email").value.trim();
-  sessionId = `${candidateName}_${Date.now()}`;
 
-  
-  const formData = new FormData();
-  formData.append("name", candidateName);
-  formData.append("email", candidateEmail);
-  formData.append("sessionId", sessionId);
-  formData.append("transcript", transcript);
+  sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
 
-  try {
-    await fetch(`${SERVER_URL}/start-session`, {
-      method: "POST",
-      body: formData
-    });
-    console.log("Session started successfully.");
-  } catch (err) {
-    console.error("Failed to start session:", err);
-    alert("Could not start the session. Try again.");
-  }
 
   document.getElementById("candidateForm").style.display = "none";
-  document.getElementById("startBtn").style.display = "block"; 
+  document.getElementById("startBtn").style.display = "inline-block";
 });
-
-
 
 
 
@@ -69,6 +37,7 @@ let currentQuestionIndex = 0;
 
 window.addEventListener("load", () => {
   fetch(`${SERVER_URL}/questions`)
+
     .then(res => res.json())
     .then(data => {
       questions = data;
@@ -78,82 +47,40 @@ window.addEventListener("load", () => {
       alert("Could not load questions from server.");
     });
 
-  
+  const openRequest = indexedDB.open("RecordingDB", 1);
+  openRequest.onupgradeneeded = (e) => {
+    db = e.target.result;
+    if (!db.objectStoreNames.contains("chunks")) {
+      db.createObjectStore("chunks", { autoIncrement: true });
+    }
+  };
+  openRequest.onsuccess = (e) => {
+    db = e.target.result;
+    const tx = db.transaction("chunks", "readonly");
+    const store = tx.objectStore("chunks");
+    const getAll = store.getAll();
+    getAll.onsuccess = () => {
+      if (getAll.result.length > 0) {
+        if (confirm("Previous interview session was interrupted. Recover?")) {
+          recoverPreviousRecording();
+        }
+      }
+    };
+  };
 });
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const recognition = new SpeechRecognition();
-recognition.continuous = true;
+recognition.continuous = false;
 recognition.interimResults = true;
 recognition.lang = 'en-US';
 
 let mediaRecorder;
-
+let recordedChunks = [];
 let conversation = "";
 let audioCtx;
 let destinationStream;
 let interimElement = null;
-let isSpeechRecognitionWorking = true; 
-let disconnectTimer = null;
-
-async function fetchTranscript(question, attempt = 1) {
-  const maxAttempts = 5;
-  const delay = 2000; // 2 seconds between tries
-
-  const response = await fetch("/transcribe", {
-    method: "POST",
-    body: JSON.stringify({ session_id: sessionId, question }),
-    headers: { "Content-Type": "application/json" }
-  });
-
-  const data = await response.json();
-  
-  if (data.transcript && data.transcript.trim() !== "") {
-    showMessage(data.transcript, "user");
-  } else {
-    if (attempt < maxAttempts) {
-      console.log(`⏳ Retrying transcript... (Attempt ${attempt})`);
-      setTimeout(() => {
-        fetchTranscript(question, attempt + 1);
-      }, delay);
-    } else {
-      showMessage("[No response]", "user");
-    }
-  }
-}
-
-
-window.addEventListener("offline", () => {
-  alert("Internet disconnected. Interview paused. Recording will resume when you're back online.");
-
-  if (mediaRecorder?.state === "recording") {
-    mediaRecorder.pause(); 
-  }
-
-  disconnectTimer = setTimeout(() => {
-    if (!navigator.onLine && mediaRecorder?.state !== "inactive") {
-      mediaRecorder.stop();
-      alert("Internet didn’t return in 2 mins. Interview saved partially.");
-    }
-  }, 2 * 60 * 1000);
-});
-
-
-window.addEventListener("online", () => {
-  if (disconnectTimer) {
-    clearTimeout(disconnectTimer);
-    disconnectTimer = null;
-  }
-
-  alert("Internet reconnected.");
-
-  if (mediaRecorder?.state === "paused") {
-    mediaRecorder.resume();
-  }
-
-  
-});
-
 
 const startButton = document.getElementById("startBtn");
 const preview = document.getElementById("preview");
@@ -164,139 +91,55 @@ startButton.addEventListener("click", async () => {
     return;
   }
 
-  try {
-  micStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-} catch (err) {
-  alert("Access to camera or microphone denied.");
-  return;
-}
-
+  const micStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   preview.srcObject = micStream;
 
-  const combinedStream = micStream; // includes both audio and video tracks
+  audioCtx = new AudioContext();
+  const destination = audioCtx.createMediaStreamDestination();
+  destinationStream = destination.stream;
 
+  const micSource = audioCtx.createMediaStreamSource(micStream);
+  micSource.connect(destination);
 
-  mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm; codecs=vp9' });
+  const combinedStream = new MediaStream([
+    ...micStream.getVideoTracks(),
+    ...destinationStream.getAudioTracks()
+  ]);
 
+  recordedChunks = [];
+  mediaRecorder = new MediaRecorder(combinedStream);
 
-
-
-  mediaRecorder.ondataavailable = async (e) => {
-  if (e.data.size > 0) {
-    const formData = new FormData();
-    formData.append("videoBlob", e.data, `chunk-${Date.now()}.webm`);
-    formData.append("name", candidateName);
-    formData.append("email", candidateEmail);
-    formData.append("sessionId", sessionId); 
-    formData.append("index", chunkIndex);    
-
-    chunkIndex++;
-
-    try {
-      await fetch("/upload-chunk", {
-        method: "POST",
-        body: formData,
-      });
-      console.log(" Chunk uploaded");
-
-      
-      if (wasOffline) {
-        wasOffline = false;
-        clearTimeout(offlineTimer);
-        if (mediaRecorder.state === "paused") {
-          mediaRecorder.resume();
-          console.log(" Internet restored. Resumed recording.");
-        }
-      }
-
-    } catch (err) {
-      console.warn(" Chunk upload failed (maybe offline)", err);
-
-      if (!wasOffline) {
-        wasOffline = true;
-        offlineStartTime = Date.now();
-
-        
-        if (mediaRecorder && mediaRecorder.state === "recording") {
-          mediaRecorder.pause();
-          console.log("⏸ Paused recording due to internet loss.");
-        }
-
-        
-        offlineTimer = setTimeout(() => {
-          if (!navigator.onLine) {
-            console.log("⏱️ 2 minutes passed without internet. Stopping recorder.");
-            if (mediaRecorder && mediaRecorder.state !== "inactive") {
-              mediaRecorder.stop(); 
-              alert("Internet didn’t return. Your partial video has been saved.");
-            }
-          }
-        }, 2 * 60 * 1000);
-      }
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data.size > 0) {
+      recordedChunks.push(e.data);
+      const tx = db.transaction("chunks", "readwrite");
+      const store = tx.objectStore("chunks");
+      store.add(e.data);
     }
-  }
-};
-
-
-mediaRecorder.start(5000); 
-
+  };
 
   mediaRecorder.onstop = async () => {
-  await fetchTranscript(currentQuestionIndex);
+  const blob = new Blob(recordedChunks, { type: 'video/webm' });
+  const textBlob = new Blob([conversation], { type: 'text/plain' });
 
-  setTimeout(() => {
-    if (currentQuestionIndex + 1 < questions.length) {
-      currentQuestionIndex++;
-      askQuestionAndListen(currentQuestionIndex);
-    } else {
-      finalizeInterview(); // Now called reliably
-    }
-  }, 1500);
+  try {
+    await uploadToServer(blob, textBlob);
+    alert("Interview uploaded successfully!");
+  } catch (err) {
+    console.error("Upload failed:", err);
+    alert("Upload to server failed.");
+  }
+
+  const clearTx = db.transaction("chunks", "readwrite");
+  const clearStore = clearTx.objectStore("chunks");
+  clearStore.clear();
 };
 
 
-async function finalizeInterview() {
-  alert("Interview completed. Uploading your data...");
-
-  const formData = new FormData();
-  formData.append("sessionId", sessionId);
-  formData.append("name", candidateName);
-  formData.append("email", candidateEmail);
-  const transcriptBlob = new Blob([conversation], { type: "text/plain" });
-  formData.append("transcript", transcriptBlob, "interview_transcript.txt");
-
-
-  try {
-  const response = await fetch(`${SERVER_URL}/finalize-session`, {
-    method: "POST",
-    body: formData
-  });
-
-  if (response.ok) {
-    console.log("✅ Session finalized successfully.");
-    
-    alert("🎉 Interview uploaded successfully!");
-    document.getElementById("chatContainer").innerHTML += `
-      <div class='message ai'>✅ Interview Uploaded Successfully</div>
-    `;
-  } else {
-    console.warn("⚠️ Finalize session failed:", await response.text());
-  }
-} catch (err) {
-  console.error("❌ Error finalizing session:", err);
-}
-
-
-}
-
   currentQuestionIndex = 0;
-  
-
-askQuestionAndListen(currentQuestionIndex);
-
+  mediaRecorder.start();
+  askQuestionAndListen(currentQuestionIndex);
 });
-
-let isFinalizing = false;
 
 function askQuestionAndListen(index) {
   if (index >= questions.length) {
@@ -308,6 +151,7 @@ function askQuestionAndListen(index) {
 
   const question = questions[index];
   conversation += `AI: ${question}\n`;
+
   appendMessage("ai", question);
 
   const utterance = new SpeechSynthesisUtterance(question);
@@ -318,87 +162,111 @@ function askQuestionAndListen(index) {
     recognitionTimeout = setTimeout(() => {
       recognition.stop();  
       handleNoResponseFallback(); 
-    }, 5000); 
+    }, 6000); 
   };
   speechSynthesis.speak(utterance);
 }
 
+recognition.onresult = (event) => {
+  clearTimeout(recognitionTimeout); 
 
+  let finalTranscript = "";
+  let interimTranscript = "";
+
+  for (let i = event.resultIndex; i < event.results.length; ++i) {
+    const transcript = event.results[i][0].transcript;
+
+    if (event.results[i].isFinal) {
+      finalTranscript += transcript + " ";
+      conversation += `Candidate: ${transcript}\n\n`;
+
+      appendMessage("user", transcript);
+
+      if (interimElement) {
+        interimElement.remove();
+        interimElement = null;
+      }
+
+      recognition.stop();
+      setTimeout(() => askQuestionAndListen(currentQuestionIndex + 1), 1500);
+    } else {
+      interimTranscript += transcript;
+    }
+  }
+
+  if (interimTranscript) {
+    if (!interimElement) {
+      interimElement = document.createElement("div");
+      interimElement.classList.add("message", "user");
+      interimElement.style.opacity = "0.6";
+      document.getElementById("chatContainer").appendChild(interimElement);
+    }
+    interimElement.textContent = interimTranscript;
+  }
+};
 
 function handleNoResponseFallback() {
   conversation += `Candidate: [No response]\n\n`;
+
   appendMessage("user", "[No response]");
   setTimeout(() => askQuestionAndListen(currentQuestionIndex + 1), 1500);
 }
 
 
-recognition.onerror = (event) => {
-  clearTimeout(recognitionTimeout);
-
-  if (event.error === "network" || event.error === "not-allowed") {
-    isSpeechRecognitionWorking = false;
-    console.warn("Speech recognition stopped due to network or permission issue.");
-  }
-
+recognition.onerror = () => {
+  recognition.onerror = () => {
+  clearTimeout(recognitionTimeout); 
   handleNoResponseFallback();
 };
 
+};
 
+function recoverPreviousRecording() {
+  const tx = db.transaction("chunks", "readonly");
+  const store = tx.objectStore("chunks");
+  const allChunks = [];
 
+  store.openCursor().onsuccess = (event) => {
+    const cursor = event.target.result;
+    if (cursor) {
+      allChunks.push(cursor.value);
+      cursor.continue();
+    } else {
+      if (allChunks.length > 0) {
+        const recoveredBlob = new Blob(allChunks, { type: 'video/webm' });
+        const recoveredURL = URL.createObjectURL(recoveredBlob);
+        uploadToServer(recoveredBlob, new Blob(["Recovered session"], { type: 'text/plain' }));
 
-async function uploadToServer(videoBlob, textBlob) {
+        const clearTx = db.transaction("chunks", "readwrite");
+        const clearStore = clearTx.objectStore("chunks");
+        clearStore.clear();
+      }
+    }
+  };
+}
+
+function uploadToServer(videoBlob, textBlob) {
   const formData = new FormData();
   formData.append("name", candidateName);  
   formData.append("email", candidateEmail);
+
   formData.append("video", videoBlob, "interview_video.webm");
   formData.append("transcript", textBlob, "interview_transcript.txt");
+
   formData.append("sessionId", sessionId);
 
-  try {
-    const response = await fetch(`${SERVER_URL}/upload`, {
-      method: "POST",
-      body: formData,
+  fetch(`${SERVER_URL}/upload`, {
+
+    method: "POST",
+    body: formData,
+  })
+    .then(res => res.text())
+    .then(data => {
+      console.log("Upload response:", data);
+      alert("Interview uploaded successfully!");
+    })
+    .catch(err => {
+      console.error("Upload failed:", err);
+      alert("Upload to server failed.");
     });
-
-    const result = await response.text();
-    console.log("Upload response:", result);
-    alert("Interview uploaded successfully!");
-  } catch (err) {
-    console.error("Upload failed:", err);
-    alert("Upload to server failed.");
-  }
 }
-
-window.addEventListener("beforeunload", async (e) => {
-  if (mediaRecorder && mediaRecorder.state !== "inactive") {
-    mediaRecorder.stop();
-
-    
-    const transcriptBlob = new Blob([conversation], { type: "text/plain" });
-
-    const formData = new FormData();
-    formData.append("name", candidateName);
-    formData.append("email", candidateEmail);
-    formData.append("sessionId", sessionId);
-    formData.append("transcript", transcriptBlob, "interview_transcript.txt");
-
-    try {
-      await fetch(`${SERVER_URL}/upload`, {
-        method: "POST",
-        body: formData,
-      });
-      console.log("Transcript uploaded on tab close.");
-    } catch (err) {
-      console.warn("Failed to upload transcript before unload:", err);
-    }
-
-    const message = "Interview is being saved. Please wait a few seconds...";
-    e.returnValue = message;
-    return message;
-  }
-});
-
-
-
-
-
