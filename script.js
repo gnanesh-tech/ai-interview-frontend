@@ -27,7 +27,10 @@ document.getElementById("candidateForm").addEventListener("submit", async (e) =>
   // ✅ Start the interview now
   console.log("Calling startInterview with:", candidateName, candidateEmail, sessionId);
 
+  setTimeout(() => {
   startInterview(candidateName, candidateEmail, sessionId);
+}, 1000);  // slight delay before calling API
+
 });
 
 
@@ -36,6 +39,11 @@ async function startInterview(name, email, sessionId) {
     alert("Missing candidate details. Please fill the form again.");
     return;
   }
+  console.log("Sending POST to /start-session with:", {
+  name, email, session_id: sessionId,
+  url: `${SERVER_URL}/start-session`
+});
+
 
   try {
     const response = await fetch(`${SERVER_URL}/start-session`, {
