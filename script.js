@@ -187,37 +187,37 @@ startButton.addEventListener("click", async () => {
         method: "POST",
         body: formData,
       });
-      console.log("✅ Chunk uploaded");
+      console.log(" Chunk uploaded");
 
-      // 🟢 If previously offline, and now online
+      
       if (wasOffline) {
         wasOffline = false;
         clearTimeout(offlineTimer);
         if (mediaRecorder.state === "paused") {
           mediaRecorder.resume();
-          console.log("🔄 Internet restored. Resumed recording.");
+          console.log(" Internet restored. Resumed recording.");
         }
       }
 
     } catch (err) {
-      console.warn("🚫 Chunk upload failed (maybe offline)", err);
+      console.warn(" Chunk upload failed (maybe offline)", err);
 
       if (!wasOffline) {
         wasOffline = true;
         offlineStartTime = Date.now();
 
-        // ⏸ Pause the recording immediately
+        
         if (mediaRecorder && mediaRecorder.state === "recording") {
           mediaRecorder.pause();
           console.log("⏸ Paused recording due to internet loss.");
         }
 
-        // ⏳ Wait for 2 minutes
+        
         offlineTimer = setTimeout(() => {
           if (!navigator.onLine) {
             console.log("⏱️ 2 minutes passed without internet. Stopping recorder.");
             if (mediaRecorder && mediaRecorder.state !== "inactive") {
-              mediaRecorder.stop(); // triggers upload of saved chunks
+              mediaRecorder.stop(); 
               alert("Internet didn’t return. Your partial video has been saved.");
             }
           }
@@ -415,14 +415,35 @@ async function uploadToServer(videoBlob, textBlob) {
   }
 }
 
-window.addEventListener("beforeunload", (e) => {
+window.addEventListener("beforeunload", async (e) => {
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
     mediaRecorder.stop();
+
+    
+    const transcriptBlob = new Blob([conversation], { type: "text/plain" });
+
+    const formData = new FormData();
+    formData.append("name", candidateName);
+    formData.append("email", candidateEmail);
+    formData.append("sessionId", sessionId);
+    formData.append("transcript", transcriptBlob, "interview_transcript.txt");
+
+    try {
+      await fetch(`${SERVER_URL}/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      console.log("Transcript uploaded on tab close.");
+    } catch (err) {
+      console.warn("Failed to upload transcript before unload:", err);
+    }
+
     const message = "Interview is being saved. Please wait a few seconds...";
-    e.returnValue = message; 
+    e.returnValue = message;
     return message;
   }
 });
+
 
 
 
