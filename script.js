@@ -300,64 +300,26 @@ let isFinalizing = false;
 
 function askQuestionAndListen(index) {
   if (index >= questions.length) {
-    if (!isFinalizing && mediaRecorder && mediaRecorder.state !== "inactive") {
-      isFinalizing = true;
-      mediaRecorder.stop(); // triggers mediaRecorder.onstop
-    } else if (!isFinalizing) {
-      finalizeInterview();
-      isFinalizing = true;
-    }
+    mediaRecorder.stop();
     return;
   }
 
   currentQuestionIndex = index;
+
   const question = questions[index];
   conversation += `AI: ${question}\n`;
   appendMessage("ai", question);
 
   const utterance = new SpeechSynthesisUtterance(question);
   utterance.onend = () => {
-    let hasSpoken = false;
+    recognition.start();
 
-    try {
-      recognition.start();
-    } catch (err) {
-      console.warn("Speech recognition error on start:", err);
-    }
-
-    recognition.onresult = function (event) {
-      let fullTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        fullTranscript += event.results[i][0].transcript;
-      }
-
-      const transcript = fullTranscript.trim();
-      if (transcript) {
-        hasSpoken = true;
-        appendMessage("user", transcript);
-        conversation += `Candidate: ${transcript}\n\n`;
-        recognition.stop();
-
-        setTimeout(() => {
-          askQuestionAndListen(index + 1);
-        }, 1000);
-      }
-    };
-
-    recognition.onerror = function (event) {
-      console.warn("Speech recognition error:", event.error);
-      recognition.stop(); // let onend handle fallback
-    };
-
-    recognition.onend = function () {
-      if (!hasSpoken) {
-        appendMessage("user", "[No response]");
-        conversation += `Candidate: [No response]\n\n`;
-        askQuestionAndListen(index + 1);
-      }
-    };
+    
+    recognitionTimeout = setTimeout(() => {
+      recognition.stop();  
+      handleNoResponseFallback(); 
+    }, 5000); 
   };
-
   speechSynthesis.speak(utterance);
 }
 
