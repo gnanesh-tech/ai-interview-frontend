@@ -300,49 +300,70 @@ let isFinalizing = false;
 
 function askQuestionAndListen(index) {
   if (index >= questions.length) {
-  if (!isFinalizing && mediaRecorder && mediaRecorder.state !== "inactive") {
-    isFinalizing = true;
-    mediaRecorder.stop(); // triggers mediaRecorder.onstop
-  } else if (!isFinalizing) {
-    finalizeInterview(); // just in case recording already stopped
-    isFinalizing = true;
-  }
-  return;
-  }
-
-
-  if (index >= questions.length) {
-    alert("Interview completed. Uploading your data...");
-    
+    if (!isFinalizing && mediaRecorder && mediaRecorder.state !== "inactive") {
+      isFinalizing = true;
+      mediaRecorder.stop(); // triggers mediaRecorder.onstop
+    } else if (!isFinalizing) {
+      finalizeInterview(); // just in case recording already stopped
+      isFinalizing = true;
+    }
+    alert("🎉 Interview completed. Uploading your data...");
     return;
   }
 
   currentQuestionIndex = index;
-
   const question = questions[index];
   conversation += `AI: ${question}\n`;
   appendMessage("ai", question);
 
   const utterance = new SpeechSynthesisUtterance(question);
+
   utterance.onend = () => {
-  if (isSpeechRecognitionWorking) {
+    let hasSpoken = false;
+
     try {
-    recognition.start();
-  } catch (err) {
-    console.warn("Speech recognition could not start:", err);
-}
+      recognition.start();
+    } catch (err) {
+      console.warn("Speech recognition error on start:", err);
+    }
 
+    recognition.onresult = function (event) {
+      const transcript = event.results[0][0].transcript.trim();
+      if (transcript) {
+        hasSpoken = true;
+        appendMessage("user", transcript);
+        conversation += `Candidate: ${transcript}\n\n`;
+        recognition.stop();
 
-    recognitionTimeout = setTimeout(() => {
-      recognition.stop();  
-      handleNoResponseFallback();
-    }, 5000); 
-  }
-};
+        setTimeout(() => {
+          askQuestionAndListen(index + 1);
+        }, 1000); // short delay before next question
+      }
+    };
 
+    recognition.onerror = function (event) {
+      console.warn("Speech recognition error:", event.error);
+      recognition.stop();
+      if (!hasSpoken) {
+        appendMessage("user", "[No response]");
+        conversation += `Candidate: [No response]\n\n`;
+        askQuestionAndListen(index + 1);
+      }
+    };
+
+    recognition.onend = function () {
+      if (!hasSpoken) {
+        console.warn("Speech ended with no response");
+        appendMessage("user", "[No response]");
+        conversation += `Candidate: [No response]\n\n`;
+        askQuestionAndListen(index + 1);
+      }
+    };
+  };
 
   speechSynthesis.speak(utterance);
 }
+
 
 
 
