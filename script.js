@@ -23,6 +23,7 @@ document.getElementById("candidateForm").addEventListener("submit", async (e) =>
   localStorage.setItem("sessionId", sessionId);
 
   document.getElementById("candidateForm").style.display = "none";
+  document.getElementById("startBtn").style.display = "inline-block";
 
   // ✅ Start the interview now
   console.log("Calling startInterview with:", candidateName, candidateEmail, sessionId);
@@ -39,43 +40,34 @@ async function startInterview(name, email, sessionId) {
     alert("Missing candidate details. Please fill the form again.");
     return;
   }
-  console.log("Sending POST to /start-session with:", {
-  name, email, session_id: sessionId,
-  url: `${SERVER_URL}/start-session`
-});
 
+  const formData = new FormData();
+  formData.append("name", name);
+  formData.append("email", email);
+  formData.append("sessionId", sessionId);
 
   try {
     const response = await fetch(`${SERVER_URL}/start-session`, {
-
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        name: name,
-        email: email,
-        session_id: sessionId
-      })
+      body: formData
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.text();
       console.error("Backend Error:", errorData);
       alert("Failed to start session. Please try again.");
       return;
     }
 
     const data = await response.json();
-    console.log("Session started:", data);
-
-    // 👉 From here, you can now begin recording/chat etc.
+    console.log("✅ Session started:", data);
 
   } catch (error) {
     console.error("Error starting interview:", error);
     alert("Error connecting to server.");
   }
 }
+
 
 const SERVER_URL = "https://ai-interview-backend-bzpz.onrender.com";
 let recognitionTimeout = null;
