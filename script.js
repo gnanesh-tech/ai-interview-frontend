@@ -89,6 +89,10 @@ let db;
 let currentQuestionIndex = 0; 
 
 window.addEventListener("load", () => {
+
+  candidateName = localStorage.getItem("candidateName") || "";
+  candidateEmail = localStorage.getItem("candidateEmail") || "";
+  sessionId = localStorage.getItem("sessionId") || "";
   fetch(`${SERVER_URL}/questions`)
 
     .then(res => res.json())
@@ -334,19 +338,28 @@ function recoverPreviousRecording() {
 
 
 function uploadChunkToServer(chunk) {
+  const sid = localStorage.getItem("sessionId");
+  const name = localStorage.getItem("candidateName");
+  const email = localStorage.getItem("candidateEmail");
+
+  if (!sid || !name || !email) {
+    console.warn("⚠️ Skipping chunk: Missing session or candidate info");
+    return;
+  }
+
   const formData = new FormData();
   formData.append("chunk", chunk, "chunk.webm");
-  formData.append("sessionId", sessionId);
-  formData.append("name", candidateName);      // ✅ added
-  formData.append("email", candidateEmail);    // ✅ added
+  formData.append("sessionId", sid);
+  formData.append("name", name);
+  formData.append("email", email);
 
   fetch(`${SERVER_URL}/upload-chunk`, {
     method: "POST",
     body: formData,
   })
-  .then(res => res.text())
-  .then(data => console.log("Chunk uploaded"))
-  .catch(err => console.error("Chunk upload failed:", err));
+    .then(res => res.text())
+    .then(data => console.log("✅ Chunk uploaded"))
+    .catch(err => console.error("❌ Chunk upload failed:", err));
 }
 
 
