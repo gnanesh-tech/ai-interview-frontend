@@ -326,7 +326,12 @@ function recoverPreviousRecording() {
         const recoveredURL = URL.createObjectURL(recoveredBlob);
         
         isRecovering = true;  // 🔁 prevent mediaRecorder.onstop logic
-        uploadToServer(recoveredBlob, new Blob(["Recovered session"], { type: 'text/plain' }));
+        candidateName = localStorage.getItem("candidateName") || "Unknown";
+        candidateEmail = localStorage.getItem("candidateEmail") || "Unknown";
+        sessionId = localStorage.getItem("sessionId") || `unknown_${Date.now()}`;
+        uploadToServer(recoveredBlob, new Blob(["Recovered session"], { type: 'text/plain' }), candidateName, candidateEmail, sessionId);
+
+
 
         const clearTx = db.transaction("chunks", "readwrite");
         const clearStore = clearTx.objectStore("chunks");
@@ -374,13 +379,13 @@ function notifyInterviewComplete() {
   .catch(err => console.error("Error marking complete:", err));
 }
 
-async function uploadToServer(videoBlob, transcriptBlob) {
+async function uploadToServer(videoBlob, transcriptBlob, customName = candidateName, customEmail = candidateEmail, customSessionId = sessionId) {
   const formData = new FormData();
   formData.append("video", videoBlob, "interview.webm");
   formData.append("transcript", transcriptBlob, "transcript.txt");
-  formData.append("sessionId", sessionId);
-  formData.append("name", candidateName);
-  formData.append("email", candidateEmail);
+  formData.append("sessionId", customSessionId);
+  formData.append("name", customName);
+  formData.append("email", customEmail);
 
   try {
     const response = await fetch(`${SERVER_URL}/upload`, {
