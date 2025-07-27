@@ -1,6 +1,8 @@
 let sessionId = "";  
 let candidateName = "";
 let candidateEmail = "";
+let isRecovering = false;
+
 
 document.getElementById("candidateForm").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -19,7 +21,7 @@ document.getElementById("candidateForm").addEventListener("submit", (e) => {
 const SERVER_URL = "https://ai-interview-backend-bzpz.onrender.com";
 let recognitionTimeout = null;
 
-const urlParams = new URLSearchParams(window.location.search);
+//const urlParams = new URLSearchParams(window.location.search);
 //const sessionId = urlParams.get("sessionId") || "anonymous_" + Date.now();
 
 function appendMessage(sender, text) {
@@ -86,6 +88,37 @@ const startButton = document.getElementById("startBtn");
 const preview = document.getElementById("preview");
 
 startButton.addEventListener("click", async () => {
+  if (!candidateName || !candidateEmail || !sessionId) {
+    alert("Missing candidate details.");
+    return;
+  }
+  if (!db) {
+    alert("IndexedDB not initialized yet. Please wait a moment and try again.");
+    return;
+  }
+
+  // ✅ Create FormData and POST to /start-session
+  const formData = new FormData();
+  formData.append("sessionId", sessionId);
+  formData.append("name", candidateName);
+  formData.append("email", candidateEmail);
+
+  try {
+    const res = await fetch(`${SERVER_URL}/start-session`, {
+      method: "POST",
+      body: formData
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to start session");
+    }
+  } catch (err) {
+    console.error("❌ Error initializing session:", err);
+    alert("Could not start session on the server.");
+    return;
+  }
+
+  // ✅ Continue recording logic
   if (questions.length === 0) {
     alert("Interview questions not loaded yet.");
     return;
@@ -111,35 +144,51 @@ startButton.addEventListener("click", async () => {
 
   mediaRecorder.ondataavailable = (e) => {
     if (e.data.size > 0) {
-      recordedChunks.push(e.data);
+      const chunk = e.data;
+      recordedChunks.push(chunk);
+      if (!db) {
+    alert("IndexedDB not ready. Cannot recover previous session.");
+    return;
+    }
+
       const tx = db.transaction("chunks", "readwrite");
       const store = tx.objectStore("chunks");
-      store.add(e.data);
+      store.add(chunk);
+
+      uploadChunkToServer(chunk);  // ✅ uses correct sessionId + name + email
     }
   };
 
   mediaRecorder.onstop = async () => {
-  const blob = new Blob(recordedChunks, { type: 'video/webm' });
-  const textBlob = new Blob([conversation], { type: 'text/plain' });
+    if (isRecovering) return;
+    notifyInterviewComplete(); 
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const textBlob = new Blob([conversation], { type: 'text/plain' });
 
-  try {
-    await uploadToServer(blob, textBlob);
-    alert("Interview uploaded successfully!");
-  } catch (err) {
-    console.error("Upload failed:", err);
-    alert("Upload to server failed.");
-  }
+    try {
+      await uploadToServer(blob, textBlob);
+    } catch (err) {
+      console.error("Upload failed:", err);
+      alert("Upload to server failed.");
+    }
 
-  const clearTx = db.transaction("chunks", "readwrite");
-  const clearStore = clearTx.objectStore("chunks");
-  clearStore.clear();
-};
-
+    const clearTx = db.transaction("chunks", "readwrite");
+    const clearStore = clearTx.objectStore("chunks");
+    clearStore.clear();
+  };
 
   currentQuestionIndex = 0;
+  try {
   mediaRecorder.start();
+} catch (err) {
+  console.error("MediaRecorder start failed:", err);
+  alert("Recording could not start. Please try again.");
+  return;
+}
+
   askQuestionAndListen(currentQuestionIndex);
 });
+
 
 function askQuestionAndListen(index) {
   if (index >= questions.length) {
@@ -214,14 +263,18 @@ function handleNoResponseFallback() {
 
 
 recognition.onerror = () => {
-  recognition.onerror = () => {
+  
   clearTimeout(recognitionTimeout); 
   handleNoResponseFallback();
-};
+
 
 };
 
 function recoverPreviousRecording() {
+  if (!db) {
+    alert("IndexedDB not ready. Cannot recover previous session.");
+    return;
+  }
   const tx = db.transaction("chunks", "readonly");
   const store = tx.objectStore("chunks");
   const allChunks = [];
@@ -235,6 +288,8 @@ function recoverPreviousRecording() {
       if (allChunks.length > 0) {
         const recoveredBlob = new Blob(allChunks, { type: 'video/webm' });
         const recoveredURL = URL.createObjectURL(recoveredBlob);
+        
+        isRecovering = true;  // 🔁 prevent mediaRecorder.onstop logic
         uploadToServer(recoveredBlob, new Blob(["Recovered session"], { type: 'text/plain' }));
 
         const clearTx = db.transaction("chunks", "readwrite");
@@ -245,28 +300,54 @@ function recoverPreviousRecording() {
   };
 }
 
-function uploadToServer(videoBlob, textBlob) {
+
+function uploadChunkToServer(chunk) {
   const formData = new FormData();
-  formData.append("name", candidateName);  
-  formData.append("email", candidateEmail);
-
-  formData.append("video", videoBlob, "interview_video.webm");
-  formData.append("transcript", textBlob, "interview_transcript.txt");
-
+  formData.append("chunk", chunk, "chunk.webm");
   formData.append("sessionId", sessionId);
+  formData.append("name", candidateName);      // ✅ added
+  formData.append("email", candidateEmail);    // ✅ added
 
-  fetch(`${SERVER_URL}/upload`, {
-
+  fetch(`${SERVER_URL}/upload-chunk`, {
     method: "POST",
     body: formData,
   })
-    .then(res => res.text())
-    .then(data => {
-      console.log("Upload response:", data);
-      alert("Interview uploaded successfully!");
-    })
-    .catch(err => {
-      console.error("Upload failed:", err);
-      alert("Upload to server failed.");
-    });
+  .then(res => res.text())
+  .then(data => console.log("Chunk uploaded"))
+  .catch(err => console.error("Chunk upload failed:", err));
 }
+
+
+function notifyInterviewComplete() {
+  fetch(`${SERVER_URL}/mark-complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId }),
+  })
+  .then(res => res.text())
+  .then(data => console.log("Interview marked complete."))
+  .catch(err => console.error("Error marking complete:", err));
+}
+
+async function uploadToServer(videoBlob, transcriptBlob) {
+  const formData = new FormData();
+  formData.append("video", videoBlob, "interview.webm");
+  formData.append("transcript", transcriptBlob, "transcript.txt");
+  formData.append("sessionId", sessionId);
+  formData.append("name", candidateName);
+  formData.append("email", candidateEmail);
+
+  const response = await fetch(`${SERVER_URL}/upload-final`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to upload final video and transcript.");
+  }
+
+  console.log("✅ Final video and transcript uploaded.");
+}
+
+
+
