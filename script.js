@@ -304,10 +304,9 @@ function askQuestionAndListen(index) {
       isFinalizing = true;
       mediaRecorder.stop(); // triggers mediaRecorder.onstop
     } else if (!isFinalizing) {
-      finalizeInterview(); // just in case recording already stopped
+      finalizeInterview();
       isFinalizing = true;
     }
-    alert("🎉 Interview completed. Uploading your data...");
     return;
   }
 
@@ -317,7 +316,6 @@ function askQuestionAndListen(index) {
   appendMessage("ai", question);
 
   const utterance = new SpeechSynthesisUtterance(question);
-
   utterance.onend = () => {
     let hasSpoken = false;
 
@@ -328,7 +326,12 @@ function askQuestionAndListen(index) {
     }
 
     recognition.onresult = function (event) {
-      const transcript = event.results[0][0].transcript.trim();
+      let fullTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        fullTranscript += event.results[i][0].transcript;
+      }
+
+      const transcript = fullTranscript.trim();
       if (transcript) {
         hasSpoken = true;
         appendMessage("user", transcript);
@@ -337,23 +340,17 @@ function askQuestionAndListen(index) {
 
         setTimeout(() => {
           askQuestionAndListen(index + 1);
-        }, 1000); // short delay before next question
+        }, 1000);
       }
     };
 
     recognition.onerror = function (event) {
       console.warn("Speech recognition error:", event.error);
-      recognition.stop();
-      if (!hasSpoken) {
-        appendMessage("user", "[No response]");
-        conversation += `Candidate: [No response]\n\n`;
-        askQuestionAndListen(index + 1);
-      }
+      recognition.stop(); // let onend handle fallback
     };
 
     recognition.onend = function () {
       if (!hasSpoken) {
-        console.warn("Speech ended with no response");
         appendMessage("user", "[No response]");
         conversation += `Candidate: [No response]\n\n`;
         askQuestionAndListen(index + 1);
@@ -363,6 +360,7 @@ function askQuestionAndListen(index) {
 
   speechSynthesis.speak(utterance);
 }
+
 
 
 function handleNoResponseFallback() {
