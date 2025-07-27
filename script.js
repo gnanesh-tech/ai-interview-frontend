@@ -96,6 +96,33 @@ let interimElement = null;
 let isSpeechRecognitionWorking = true; 
 let disconnectTimer = null;
 
+async function fetchTranscript(question, attempt = 1) {
+  const maxAttempts = 5;
+  const delay = 2000; // 2 seconds between tries
+
+  const response = await fetch("/transcribe", {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, question }),
+    headers: { "Content-Type": "application/json" }
+  });
+
+  const data = await response.json();
+  
+  if (data.transcript && data.transcript.trim() !== "") {
+    showMessage(data.transcript, "user");
+  } else {
+    if (attempt < maxAttempts) {
+      console.log(`⏳ Retrying transcript... (Attempt ${attempt})`);
+      setTimeout(() => {
+        fetchTranscript(question, attempt + 1);
+      }, delay);
+    } else {
+      showMessage("[No response]", "user");
+    }
+  }
+}
+
+
 window.addEventListener("offline", () => {
   alert("Internet disconnected. Interview paused. Recording will resume when you're back online.");
 
@@ -109,15 +136,6 @@ window.addEventListener("offline", () => {
       alert("Internet didn’t return in 2 mins. Interview saved partially.");
     }
   }, 2 * 60 * 1000);
-});
-
-
-
-
-window.addEventListener("beforeunload", (e) => {
-  if (mediaRecorder && mediaRecorder.state !== "inactive") {
-    mediaRecorder.stop();
-  }
 });
 
 
@@ -155,19 +173,11 @@ startButton.addEventListener("click", async () => {
 
   preview.srcObject = micStream;
 
-  audioCtx = new AudioContext();
-  const destination = audioCtx.createMediaStreamDestination();
-  destinationStream = destination.stream;
+  const combinedStream = micStream; // includes both audio and video tracks
 
-  const micSource = audioCtx.createMediaStreamSource(micStream);
-  micSource.connect(destination);
-
-  const combinedStream = new MediaStream([
-    ...micStream.getVideoTracks(),
-    ...destinationStream.getAudioTracks()
-  ]);
 
   mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm; codecs=vp9' });
+
 
 
 
@@ -232,28 +242,49 @@ mediaRecorder.start(5000);
 
 
   mediaRecorder.onstop = async () => {
+ 
+  // 2. Fetch transcript
+  await fetchTranscript(currentQuestionIndex);
+
+  // 3. Delay before moving to next question
+  setTimeout(() => {
+    currentQuestionIndex++;
+    if (currentQuestionIndex < questions.length) {
+      askNextQuestion(currentQuestionIndex);
+    } else {
+      finalizeInterview();
+    }
+  }, 1500); // 1.5 sec buffer
+};
+
+async function finalizeInterview() {
+  alert("Interview completed. Uploading your data...");
+
+  const formData = new FormData();
+  formData.append("sessionId", sessionId);
+  formData.append("name", candidateName);
+  formData.append("email", candidateEmail);
+  const transcriptBlob = new Blob([conversation], { type: "text/plain" });
+  formData.append("transcript", transcriptBlob, "interview_transcript.txt");
+
+
   try {
-    await fetch(`${SERVER_URL}/finalize-session`, {
+    const response = await fetch(`${SERVER_URL}/finalize-session`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        name: candidateName,
-        email: candidateEmail,
-        transcript: conversation
-      })
+      body: formData
     });
 
-    alert("Interview uploaded successfully!");
+    if (response.ok) {
+      console.log(" Session finalized successfully.");
+    } else {
+      console.warn(" Finalize session failed:", await response.text());
+    }
   } catch (err) {
-    console.error("Finalization failed:", err);
-    alert("Could not complete the interview upload.");
+    console.error(" Error finalizing session:", err);
   }
+}
 
-  if (micStream) {
-    micStream.getTracks().forEach(track => track.stop());
-  }
-};
+
 
 
 
@@ -277,7 +308,7 @@ function askQuestionAndListen(index) {
 
   if (index >= questions.length) {
     alert("Interview completed. Uploading your data...");
-    mediaRecorder.stop();
+    
     return;
   }
 
