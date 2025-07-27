@@ -211,7 +211,7 @@ startButton.addEventListener("click", async () => {
 
   currentQuestionIndex = 0;
   try {
-  mediaRecorder.start();
+  mediaRecorder.start(5000);
 } catch (err) {
   console.error("MediaRecorder start failed:", err);
   alert("Recording could not start. Please try again.");
