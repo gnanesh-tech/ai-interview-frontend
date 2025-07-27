@@ -369,7 +369,7 @@ async function uploadToServer(videoBlob, transcriptBlob) {
   formData.append("name", candidateName);
   formData.append("email", candidateEmail);
 
-  const response = await fetch(`${SERVER_URL}/upload-final`, {
+  const response = await fetch(`${SERVER_URL}/upload`, {
     method: "POST",
     body: formData,
   });
