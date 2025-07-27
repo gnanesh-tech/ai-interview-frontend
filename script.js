@@ -13,7 +13,9 @@ document.getElementById("candidateForm").addEventListener("submit", (e) => {
 
 
   document.getElementById("candidateForm").style.display = "none";
-  document.getElementById("startBtn").style.display = "inline-block";
+  document.getElementById("startBtn").style.display = "none";
+  document.getElementById("startBtn").click();  
+
 });
 
 
