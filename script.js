@@ -2,6 +2,9 @@ let sessionId = "";
 let candidateName = "";
 let candidateEmail = "";
 let isRecovering = false;
+let isWaitingForReconnect = false;
+let disconnectTimer = null;
+
 
 
 document.getElementById("candidateForm").addEventListener("submit", async (e) => {
@@ -17,7 +20,7 @@ document.getElementById("candidateForm").addEventListener("submit", async (e) =>
 
    sessionId = `${candidateName}_${Date.now()}`.replace(/\s+/g, "_");
 
-  // Store in localStorage
+  
   localStorage.setItem("candidateName", candidateName);
   localStorage.setItem("candidateEmail", candidateEmail);
   localStorage.setItem("sessionId", sessionId);
@@ -25,12 +28,12 @@ document.getElementById("candidateForm").addEventListener("submit", async (e) =>
   document.getElementById("candidateForm").style.display = "none";
   document.getElementById("startBtn").style.display = "inline-block";
 
-  // ✅ Start the interview now
+
   console.log("Calling startInterview with:", candidateName, candidateEmail, sessionId);
 
   setTimeout(() => {
   startInterview(candidateName, candidateEmail, sessionId);
-}, 1000);  // slight delay before calling API
+}, 1000);  
 
 });
 
@@ -60,7 +63,7 @@ async function startInterview(name, email, sessionId) {
     }
 
     const data = await response.json();
-    console.log("✅ Session started:", data);
+    console.log(" Session started:", data);
 
   } catch (error) {
     console.error("Error starting interview:", error);
@@ -142,6 +145,20 @@ let interimElement = null;
 const startButton = document.getElementById("startBtn");
 const preview = document.getElementById("preview");
 
+window.addEventListener('offline', () => {
+  console.warn(" Internet disconnected");
+  handleInternetLoss();
+});
+
+window.addEventListener('online', () => {
+  console.log(" Internet reconnected");
+  if (isWaitingForReconnect) {
+    clearTimeout(disconnectTimer);
+    resumeInterviewAfterReconnect();
+  }
+});
+
+
 startButton.addEventListener("click", async () => {
   if (!candidateName || !candidateEmail || !sessionId) {
     alert("Missing candidate details.");
@@ -154,7 +171,7 @@ startButton.addEventListener("click", async () => {
 
   
 
-  // ✅ Continue recording logic
+  
   if (questions.length === 0) {
     alert("Interview questions not loaded yet.");
     return;
@@ -191,7 +208,7 @@ startButton.addEventListener("click", async () => {
       const store = tx.objectStore("chunks");
       store.add(chunk);
 
-      uploadChunkToServer(chunk);  // ✅ uses correct sessionId + name + email
+      uploadChunkToServer(chunk);  
     }
   };
 
@@ -325,7 +342,7 @@ function recoverPreviousRecording() {
         const recoveredBlob = new Blob(allChunks, { type: 'video/webm' });
         const recoveredURL = URL.createObjectURL(recoveredBlob);
         
-        isRecovering = true;  // 🔁 prevent mediaRecorder.onstop logic
+        isRecovering = true;  
         candidateName = localStorage.getItem("candidateName") || "Unknown";
         candidateEmail = localStorage.getItem("candidateEmail") || "Unknown";
         sessionId = localStorage.getItem("sessionId") || `unknown_${Date.now()}`;
@@ -348,7 +365,7 @@ function uploadChunkToServer(chunk) {
   const email = localStorage.getItem("candidateEmail");
 
   if (!sid || !name || !email) {
-    console.warn("⚠️ Skipping chunk: Missing session or candidate info");
+    console.warn(" Skipping chunk: Missing session or candidate info");
     return;
   }
 
@@ -363,8 +380,8 @@ function uploadChunkToServer(chunk) {
     body: formData,
   })
     .then(res => res.text())
-    .then(data => console.log("✅ Chunk uploaded"))
-    .catch(err => console.error("❌ Chunk upload failed:", err));
+    .then(data => console.log(" Chunk uploaded"))
+    .catch(err => console.error(" Chunk upload failed:", err));
 }
 
 
@@ -378,6 +395,33 @@ function notifyInterviewComplete() {
   .then(data => console.log("Interview marked complete."))
   .catch(err => console.error("Error marking complete:", err));
 }
+
+function handleInternetLoss() {
+  if (!mediaRecorder || mediaRecorder.state !== "recording") return;
+
+  mediaRecorder.pause();
+  alert(" Internet disconnected! You have 2 minutes to reconnect before your interview ends.");
+
+  isWaitingForReconnect = true;
+  disconnectTimer = setTimeout(() => {
+    alert(" Internet not restored in time. Uploading partial interview...");
+    mediaRecorder.stop();  
+    isWaitingForReconnect = false;
+  }, 2 * 60 * 1000); 
+}
+
+function resumeInterviewAfterReconnect() {
+  alert(" Internet reconnected. Resuming interview.");
+  isWaitingForReconnect = false;
+
+  if (mediaRecorder && mediaRecorder.state === "paused") {
+    mediaRecorder.resume();
+  }
+
+  askQuestionAndListen(currentQuestionIndex);
+}
+
+
 
 async function uploadToServer(videoBlob, transcriptBlob, customName = candidateName, customEmail = candidateEmail, customSessionId = sessionId) {
   const formData = new FormData();
@@ -394,19 +438,19 @@ async function uploadToServer(videoBlob, transcriptBlob, customName = candidateN
     });
 
     const resultText = await response.text();
-    console.log("📦 Server response:", resultText);
+    console.log(" Server response:", resultText);
 
     if (!response.ok) {
-      console.error("❌ Upload failed with status", response.status);
+      console.error(" Upload failed with status", response.status);
       alert("Upload failed. Server said: " + resultText);
       return;
     }
 
-    console.log("✅ Final video and transcript uploaded.");
-    alert("✅ Interview uploaded successfully!");
+    console.log(" Final video and transcript uploaded.");
+    alert(" Interview uploaded successfully!");
 
   } catch (err) {
-    console.error("🚨 Upload failed due to network or crash:", err);
+    console.error(" Upload failed due to network or crash:", err);
     alert("Upload to server failed due to error: " + err.message);
   }
 }
