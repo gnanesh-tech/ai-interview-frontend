@@ -246,13 +246,17 @@ startButton.addEventListener("click", async () => {
 
 
 function askQuestionAndListen(index) {
+  if (isWaitingForReconnect) {
+    console.warn("⏸ Waiting for internet reconnect. Pausing question...");
+    return;
+  }
+
   if (index >= questions.length) {
     mediaRecorder.stop();
     return;
   }
 
   currentQuestionIndex = index;
-
   const question = questions[index];
   conversation += `AI: ${question}\n`;
 
@@ -260,16 +264,19 @@ function askQuestionAndListen(index) {
 
   const utterance = new SpeechSynthesisUtterance(question);
   utterance.onend = () => {
+    if (isWaitingForReconnect) return; 
+
     recognition.start();
 
-    
     recognitionTimeout = setTimeout(() => {
-      recognition.stop();  
-      handleNoResponseFallback(); 
-    }, 6000); 
+      recognition.stop();
+      handleNoResponseFallback();
+    }, 6000);
   };
+
   speechSynthesis.speak(utterance);
 }
+
 
 recognition.onresult = (event) => {
   clearTimeout(recognitionTimeout); 
