@@ -215,22 +215,37 @@ startButton.addEventListener("click", async () => {
   };
 
   mediaRecorder.onstop = async () => {
-    if (isRecovering) return;
-    notifyInterviewComplete(); 
-    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-    const textBlob = new Blob([conversation], { type: 'text/plain' });
+  if (isRecovering) return;
+  notifyInterviewComplete();
 
-    try {
-      await uploadToServer(blob, textBlob);
-    } catch (err) {
-      console.error("Upload failed:", err);
-      alert("Upload to server failed.");
+  const tx = db.transaction("chunks", "readonly");
+  const store = tx.objectStore("chunks");
+  const allChunks = [];
+
+  store.openCursor().onsuccess = async (event) => {
+    const cursor = event.target.result;
+    if (cursor) {
+      allChunks.push(cursor.value);
+      cursor.continue();
+    } else {
+      const blob = new Blob(allChunks, { type: 'video/webm' });
+      const textBlob = new Blob([conversation], { type: 'text/plain' });
+
+      try {
+        await uploadToServer(blob, textBlob);
+      } catch (err) {
+        console.error("Upload failed:", err);
+        alert("Upload to server failed.");
+        return;
+      }
+
+      const clearTx = db.transaction("chunks", "readwrite");
+      const clearStore = clearTx.objectStore("chunks");
+      clearStore.clear();
     }
-
-    const clearTx = db.transaction("chunks", "readwrite");
-    const clearStore = clearTx.objectStore("chunks");
-    clearStore.clear();
   };
+};
+
 
   currentQuestionIndex = 0;
   try {
