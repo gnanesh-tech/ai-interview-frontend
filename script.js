@@ -427,8 +427,11 @@ function resumeInterviewAfterReconnect() {
     mediaRecorder.resume();
   }
 
-  
+  setTimeout(() => {
+    askQuestionAndListen(currentQuestionIndex);
+  }, 1000); 
 }
+
 
 
 
