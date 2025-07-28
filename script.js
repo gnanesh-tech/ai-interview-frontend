@@ -7,6 +7,8 @@ let disconnectTimer = null;
 
 
 
+
+
 document.getElementById("candidateForm").addEventListener("submit", async (e) => {
   e.preventDefault();
 
@@ -397,7 +399,7 @@ function notifyInterviewComplete() {
 }
 
 function handleInternetLoss() {
-  if (!mediaRecorder || mediaRecorder.state !== "recording") return;
+  if (!mediaRecorder || mediaRecorder.state !== "recording" || isWaitingForReconnect) return;
 
   mediaRecorder.pause();
   alert(" Internet disconnected! You have 2 minutes to reconnect before your interview ends.");
@@ -418,7 +420,7 @@ function resumeInterviewAfterReconnect() {
     mediaRecorder.resume();
   }
 
-  askQuestionAndListen(currentQuestionIndex);
+  
 }
 
 
